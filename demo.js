@@ -104,6 +104,10 @@
       uniform mat3 uInv; uniform float uT, uAspect, uFit;
       uniform int uPat, uFx; uniform vec3 uA, uB; uniform sampler2D uTex; uniform float uTexOK;
       float aa(float d, float w) { float fw = fwidth(d); return 1. - smoothstep(w - fw, w + fw, d); }
+      float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+      float vnoise(vec2 p) { vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3. - 2. * f);
+        return mix(mix(hash(i), hash(i + vec2(1, 0)), u.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), u.x), u.y); }
+      float fbm(vec2 p) { float v = 0., a = .5; for (int i = 0; i < 5; i++) { v += a * vnoise(p); p = p * 2.03 + 17.; a *= .5; } return v; }
       vec3 hue(vec3 c, float a) {
         mat3 toY = mat3(.299,.596,.211, .587,-.274,-.523, .114,-.322,.312);
         mat3 toR = mat3(1.,1.,1., .956,-.272,-1.106, .621,-.647,1.703);
@@ -127,6 +131,32 @@
         }
         if (uPat == 2) { float s = fract(length(p - vec2(uAspect, 1.) * .5) * 5. - t * .3); return mix(uA, uB, smoothstep(.45, .55, s)); }
         if (uPat == 3) { float s = fract((p.x + p.y) * 4. - t * .25); return mix(uA, uB, smoothstep(.48, .52, s)); }
+        if (uPat == 5) { // fire
+          vec2 q = vec2(p.x * 3., uv.y * 3. + t * 1.4);
+          float n = fbm(q + fbm(q * 1.5 - vec2(0, t)));
+          float heat = clamp(n * 1.6 - uv.y * .3 + (1. - uv.y) * .9 - .55, 0., 1.);
+          vec3 col = mix(vec3(.25, .02, .02), vec3(1., .45, .05), clamp(heat * 1.6, 0., 1.));
+          col = mix(col, vec3(1., .95, .75), clamp(heat * 2. - 1.2, 0., 1.));
+          return col * clamp(heat * 3., 0., 1.);
+        }
+        if (uPat == 6) { // lava
+          float f = 0.;
+          for (int i = 0; i < 6; i++) { float fi = float(i);
+            vec2 c = vec2(.5 * uAspect + sin(t * .3 + fi * 1.7) * .35 * uAspect, .5 + cos(t * .23 + fi * 2.3) * .38);
+            vec2 d = p - c; f += .018 / max(dot(d, d), 1e-4); }
+          return mix(vec3(.15, .02, .2), vec3(1., .42, .16), clamp(smoothstep(.9, 1.2, f) + smoothstep(.3, 1., f) * .4, 0., 1.));
+        }
+        if (uPat == 7) { // stars
+          vec3 col = vec3(.01, .02, .06);
+          for (int l = 0; l < 3; l++) { float fl = float(l);
+            vec2 q = p * (8. + fl * 7.) + vec2(t * (.05 + fl * .04), fl * 13.);
+            vec2 cell = floor(q), f = fract(q) - .5;
+            float h = hash(cell + fl * 31.);
+            vec2 off = vec2(hash(cell + 7.), hash(cell + 3.)) - .5;
+            float star = smoothstep(.08 - fl * .02, 0., length(f - off * .6)) * step(.72, h);
+            col += vec3(1.) * star * (.6 + .4 * sin(t * (2. + h * 4.) + h * 40.)); }
+          return col;
+        }
         if (uPat == 4) {
           if (uTexOK < .5) return vec3(.06);
           float qa = uAspect, ta = .75; vec2 sc = qa < ta ? vec2(qa / ta, 1.) : vec2(1., ta / qa);
@@ -177,7 +207,7 @@
     stage.classList.add('no-gl');
   }
   const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
-  const PAT = { grid: 0, plasma: 1, rings: 2, stripes: 3, photo: 4 };
+  const PAT = { grid: 0, plasma: 1, rings: 2, stripes: 3, photo: 4, fire: 5, lava: 6, stars: 7 };
   const FX = { none: 0, pulse: 1, hue: 2, kaleido: 3, ripple: 4, drift: 5 };
 
   // ---------- sizing ----------
